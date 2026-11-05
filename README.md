@@ -54,3 +54,4 @@ Alerts are only checked **while `server.py` is running** on this computer. Your 
 - `custom-aircraft/` holds your own aircraft groups, one `.json` file each. See `custom-aircraft/README.md`.
 
 Aircraft data: [adsb.lol](https://adsb.lol) (free, open data). Map tiles: CARTO by default; add your free key from https://carto.com/basemaps/apikey in Settings → Map to remove the watermark. Military status comes from adsb.lol's aircraft database, so a few aircraft may be missing or mislabelled.
+# development

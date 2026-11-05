@@ -1,0 +1,15 @@
+# Run Skywatch with Docker:  docker compose up -d   then open http://localhost:8080
+# On TrueNAS use the version in README.md (it stores data on your pool instead of ./data).
+services:
+  skywatch:
+    image: ghcr.io/taz88323/skywatch:latest
+    build: .
+    container_name: skywatch
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Add any DNS name with dots in it that you use to open Skywatch, e.g. nas.home.arpa
+      SKYWATCH_ALLOWED_HOSTS: ""
+    volumes:
+      - ./data:/data

@@ -13,9 +13,13 @@ import http.client
 import ipaddress
 import json
 import math
+import os
 import re
 import secrets
+import shutil
+import signal
 import ssl
+import sys
 import threading
 import time
 import urllib.error
@@ -27,9 +31,14 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 STATIC = BASE / "static"
-SETTINGS_FILE = BASE / "settings.json"
-CUSTOM_DIR = BASE / "custom-aircraft"   # your own aircraft groups, one .json file each
-HISTORY_FILE = BASE / "alert-history.json"   # recent alerts, so a restart doesn't re-alert everything
+# Where your settings, alert history and groups are kept: next to this file by default,
+# or the folder in SKYWATCH_DATA (the /data volume when running in Docker).
+DATA = Path(os.environ.get("SKYWATCH_DATA") or BASE).resolve()
+SETTINGS_FILE = DATA / "settings.json"
+CUSTOM_DIR = DATA / "custom-aircraft"   # your own aircraft groups, one .json file each
+HISTORY_FILE = DATA / "alert-history.json"   # recent alerts, so a restart doesn't re-alert everything
+# Extra names you open Skywatch by, e.g. "nas.home.arpa" (comma-separated).
+EXTRA_HOSTS = {h.strip().lower() for h in os.environ.get("SKYWATCH_ALLOWED_HOSTS", "").split(",") if h.strip()}
 # Anything that can go wrong talking to adsb.lol or ntfy (URLError and TimeoutError are OSErrors).
 NETWORK_ERRORS = (OSError, http.client.HTTPException)
 DATA_API = "https://api.adsb.lol/v2"
@@ -674,7 +683,8 @@ class Handler(BaseHTTPRequestHandler):
             host = host[1:].partition("]")[0]
         elif host.count(":") == 1:               # localhost:8080
             host = host.partition(":")[0]
-        if host == "localhost" or host.endswith(".local"):
+        # Names without a dot (e.g. "truenas") are safe too: an attacker's domain always has one.
+        if host == "localhost" or host.endswith(".local") or host in EXTRA_HOSTS or (host and "." not in host):
             return True
         try:
             ipaddress.ip_address(host)
@@ -775,6 +785,16 @@ class Handler(BaseHTTPRequestHandler):
                         "limited_for": round(rate_limited_for())})
 
 
+def prepare_data_dir():
+    """Create the data folder. A new separate data folder (e.g. a Docker volume) gets the
+    example aircraft groups copied in, so you have something to start from."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    examples = BASE / "custom-aircraft"
+    if DATA != BASE and not CUSTOM_DIR.exists() and examples.is_dir():
+        shutil.copytree(examples, CUSTOM_DIR)
+
+
+prepare_data_dir()
 SETTINGS = Settings()
 CUSTOM = CustomAircraft()
 WATCHER = AlertWatcher(SETTINGS)
@@ -782,18 +802,21 @@ WATCHER = AlertWatcher(SETTINGS)
 
 def main():
     parser = argparse.ArgumentParser(description="Skywatch aircraft tracker")
-    parser.add_argument("--host", default="127.0.0.1",
+    parser.add_argument("--host", default=os.environ.get("SKYWATCH_HOST", "127.0.0.1"),
                         help="use 0.0.0.0 to open the map from other devices on your Wi-Fi")
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int, default=int(os.environ.get("SKYWATCH_PORT", 8080)))
     args = parser.parse_args()
+    # Docker stops containers with SIGTERM: shut down straight away instead of being killed 10s later.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     WATCHER.start()
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"Skywatch running at http://localhost:{args.port}")
     print(f"Phone alerts topic (subscribe in the ntfy app): {SETTINGS.get()['ntfy_topic']}")
+    print(f"Data folder: {DATA}")
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print("\nStopped.")
 
 

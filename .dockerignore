@@ -1,0 +1,10 @@
+# Keep personal data and clutter out of the image.
+settings.json
+alert-history.json
+data/
+*.tmp
+.git
+.github
+__pycache__
+*.pyc
+.DS_Store

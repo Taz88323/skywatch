@@ -23,6 +23,31 @@ Then open http://localhost:8080. Stop it with Ctrl+C.
 
 On first run Skywatch creates `settings.json` with your own private alert topic. That file holds your personal settings and API key, so don't share it.
 
+## Run it with Docker or on TrueNAS
+
+Every push to `main` builds an image at `ghcr.io/taz88323/skywatch:latest` (see the repo's **Actions** tab).
+Settings, alert history and your aircraft groups are kept in the container's `/data` folder, so mount it somewhere permanent.
+
+**Docker:** `docker compose up -d`, then open http://localhost:8080. Data is kept in `./data`.
+
+**TrueNAS SCALE** (Apps → Discover Apps → ⋮ → **Install via YAML**). Replace `tank` with your pool name:
+
+```yaml
+services:
+  skywatch:
+    image: ghcr.io/taz88323/skywatch:latest
+    restart: unless-stopped
+    user: "568:568"
+    ports:
+      - "8080:8080"
+    environment:
+      SKYWATCH_ALLOWED_HOSTS: ""   # add names like nas.home.arpa if you use one
+    volumes:
+      - /mnt/tank/apps/skywatch:/data
+```
+
+Then open `http://<your-truenas-ip>:8080`. Anyone on your network can open it and change its settings, as there's no login.
+
 ## Phone alerts (one-time setup)
 
 1. Install the free **ntfy** app on your phone (App Store or Google Play).

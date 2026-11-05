@@ -1,0 +1,15 @@
+{
+  "name": "Lancasters",
+  "color": "#a16207",
+  "enabled": true,
+  "alert": false,
+  "match": {
+    "type": [
+      "LANC"
+    ],
+    "registration": [
+      "PA474",
+      "C-GVRA"
+    ]
+  }
+}

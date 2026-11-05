@@ -1,0 +1,10 @@
+# Personal data, created automatically on first run. Never commit these.
+# settings.json holds your map API key, ntfy topic and home location.
+settings.json
+alert-history.json
+*.tmp
+
+# Python / macOS clutter
+__pycache__/
+*.pyc
+.DS_Store

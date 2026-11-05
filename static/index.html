@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skywatch</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 1.5c.8 0 1.3.9 1.3 2.2v5.1l8.2 4.6v2.2l-8.2-2.4v4.9l2.4 1.8v1.7L12 20.7l-3.7.9v-1.7l2.4-1.8v-4.9l-8.2 2.4v-2.2l8.2-4.6V3.7c0-1.3.5-2.2 1.3-2.2z"/></svg>
+    Skywatch
+  </div>
+  <div class="status" id="status"><span class="dot"></span><span id="status-text">Connecting…</span></div>
+  <div class="counts" id="counts"></div>
+  <div class="spacer"></div>
+  <div class="chip-group" role="group" aria-label="Filter aircraft">
+    <button class="chip" id="chip-mil" aria-pressed="false" title="Show only military aircraft in the map area (plus My aircraft, when on)">Military only</button>
+    <button class="chip" id="chip-civ" aria-pressed="false" title="Hide military aircraft (except My aircraft, when on)">Civilian only</button>
+    <button class="chip" id="chip-world" aria-pressed="false" title="All military aircraft worldwide">All</button>
+  </div>
+  <button class="chip mine" id="chip-mine" aria-pressed="false" title="Highlight the aircraft defined in your custom-aircraft folder"><span class="mine-dot"></span>My aircraft</button>
+  <button class="icon-btn" id="btn-alerts" title="Phone alerts" aria-label="Phone alerts">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+    <span class="bell-dot" id="bell-dot"></span>
+  </button>
+  <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></g></svg>
+  </button>
+</header>
+
+<main>
+  <div id="map"></div>
+
+  <aside id="mil-panel" class="panel mil-panel">
+    <button class="mil-head" id="mil-toggle" aria-expanded="true">
+      <span class="mil-swatch"></span>
+      <span class="mil-title" id="mil-title">Military</span>
+      <span class="count" id="mil-count">0</span>
+      <span class="chev" aria-hidden="true">▾</span>
+    </button>
+    <ul id="mil-list" class="mil-list"></ul>
+  </aside>
+
+  <section id="detail" class="panel detail" hidden>
+    <div class="detail-head">
+      <div>
+        <div class="detail-title" id="detail-title"></div>
+        <div class="badges" id="detail-badges"></div>
+      </div>
+      <button class="icon-btn small" id="detail-close" aria-label="Close">✕</button>
+    </div>
+    <dl class="detail-grid" id="detail-body"></dl>
+    <a class="detail-link" id="detail-link" target="_blank" rel="noopener">Open full history on globe.adsb.lol ↗</a>
+  </section>
+
+  <div class="notice" id="notice" hidden></div>
+</main>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<aside class="drawer" id="drawer" aria-label="Settings" aria-hidden="true">
+  <div class="drawer-head">
+    <h2>Settings</h2>
+    <button class="icon-btn small" id="drawer-close" aria-label="Close settings">✕</button>
+  </div>
+  <div class="drawer-body">
+
+    <section id="sec-alerts">
+      <h3>Phone alerts</h3>
+      <label class="toggle big">
+        <span class="t-text">Send alerts to my phone<small>Checks around your home location and pushes a notification through the ntfy app.</small></span>
+        <input type="checkbox" data-setting="alerts_enabled"><span class="switch"></span>
+      </label>
+      <div class="monitor" id="monitor"></div>
+
+      <div class="group-label">Alert me about</div>
+      <label class="toggle"><span class="t-text">Military aircraft</span><input type="checkbox" data-setting="alert_military"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">Emergency squawks<small>7500 hijack · 7600 radio failure · 7700 emergency</small></span><input type="checkbox" data-setting="alert_emergencies"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">My aircraft groups<small>Only groups whose file says <code>"alert": true</code></small></span><input type="checkbox" data-setting="alert_custom"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">Watchlist aircraft</span><input type="checkbox" data-setting="alert_watchlist"><span class="switch"></span></label>
+      <label class="field"><span>Watchlist</span>
+        <textarea data-setting="watchlist" rows="2" placeholder="Callsigns, registrations or hex codes, separated by commas"></textarea>
+      </label>
+
+      <div class="grid2">
+        <label class="field"><span>Alert radius (<b class="unit-dist"></b>)</span>
+          <input type="number" min="1" step="any" data-setting="alert_radius_nm" data-convert="dist"></label>
+        <label class="field"><span>Ignore military above (<b class="unit-alt"></b>)</span>
+          <input type="number" min="0" step="any" data-setting="alert_max_altitude_ft" data-convert="alt"><small>0 = no limit</small></label>
+        <label class="field"><span>Re-alert same aircraft after (min)</span>
+          <input type="number" min="1" max="1440" data-setting="cooldown_minutes"></label>
+        <label class="field"><span>Check every (sec)</span>
+          <input type="number" min="15" max="600" data-setting="poll_seconds"></label>
+      </div>
+
+      <details class="setup" id="setup">
+        <summary>Phone setup</summary>
+        <ol>
+          <li>Install the free <strong>ntfy</strong> app from the App Store or Google Play.</li>
+          <li>Tap <strong>+</strong> and subscribe to the topic <code id="topic-show"></code></li>
+          <li>Press <em>Send test notification</em> below.</li>
+        </ol>
+        <p class="muted">Anyone who knows your topic name can read these alerts, so keep it hard to guess.</p>
+        <label class="field"><span>Topic</span><input type="text" data-setting="ntfy_topic" spellcheck="false"></label>
+        <label class="field"><span>ntfy server</span><input type="text" data-setting="ntfy_server" spellcheck="false"></label>
+      </details>
+      <button class="btn" id="btn-test">Send test notification</button>
+    </section>
+
+    <section id="sec-home">
+      <h3>Home location</h3>
+      <p class="muted" id="home-text"></p>
+      <div class="grid2">
+        <label class="field"><span>Latitude</span><input type="number" step="any" data-setting="home_lat"></label>
+        <label class="field"><span>Longitude</span><input type="number" step="any" data-setting="home_lon"></label>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btn-locate">Use my location</button>
+        <button class="btn ghost" id="btn-center">Use map centre</button>
+      </div>
+    </section>
+
+    <section>
+      <h3>Map</h3>
+      <label class="toggle"><span class="t-text">Military only<small>Hide civilian traffic. My aircraft groups still show</small></span><input type="checkbox" data-setting="military_only"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">Civilian only<small>Hide military traffic. My aircraft groups still show</small></span><input type="checkbox" data-setting="civilian_only"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">All<small>Show every military aircraft on Earth, not just the visible area</small></span><input type="checkbox" data-setting="worldwide_military"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">My aircraft<small>Highlight the groups defined in your custom-aircraft folder</small></span><input type="checkbox" data-setting="custom_aircraft"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">Military list panel</span><input type="checkbox" data-setting="show_military_list"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">Aircraft-specific icons<small>Different shapes by aircraft type. Off = one airliner shape for everything</small></span><input type="checkbox" data-setting="type_icons"><span class="switch"></span></label>
+      <div class="icon-legend" id="icon-legend"></div>
+      <label class="toggle"><span class="t-text">Callsign labels<small>Civilian labels appear when zoomed in</small></span><input type="checkbox" data-setting="show_labels"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">Flight trails</span><input type="checkbox" data-setting="show_trails"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">Alert radius ring</span><input type="checkbox" data-setting="show_home_ring"><span class="switch"></span></label>
+      <label class="toggle"><span class="t-text">Highlight emergencies<small>Show aircraft squawking 7500/7600/7700 in red</small></span><input type="checkbox" data-setting="highlight_emergencies"><span class="switch"></span></label>
+      <label class="field"><span>Map tiles</span>
+        <select data-setting="map_provider">
+          <option value="carto">CARTO (free key)</option>
+          <option value="maptiler">MapTiler</option>
+          <option value="thunderforest">Thunderforest</option>
+          <option value="stadia">Stadia Maps</option>
+          <option value="mapbox">Mapbox</option>
+        </select></label>
+      <div class="field" id="map-key-field">
+        <label for="map-key-input"><span>Map tiles API key</span></label>
+        <div class="input-row">
+          <input type="password" id="map-key-input" autocomplete="off" spellcheck="false" placeholder="Paste your key here">
+          <button type="button" class="btn ghost" id="btn-show-key" aria-label="Show key">Show</button>
+          <button type="button" class="btn" id="btn-save-key">Save</button>
+        </div>
+        <small id="map-key-hint"></small>
+      </div>
+      <div class="grid2">
+        <label class="field"><span>Map style</span>
+          <select data-setting="map_style"><option value="auto">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <label class="field"><span>Refresh every (sec)</span>
+          <input type="number" min="5" max="120" data-setting="refresh_seconds"></label>
+      </div>
+    </section>
+
+    <section id="sec-mine">
+      <h3>My aircraft</h3>
+      <div id="group-view">
+        <p class="muted small">Create and edit your groups here. Each one is saved as a <code>.json</code> file in this folder, which you can also edit by hand:</p>
+        <code class="path" id="custom-folder"></code>
+        <ul class="group-list" id="group-list"></ul>
+        <div class="btn-row">
+          <button type="button" class="btn" id="btn-new-group">+ New group</button>
+          <button type="button" class="btn ghost" id="btn-reload-groups">Reload files</button>
+        </div>
+      </div>
+
+      <form id="group-editor" class="group-editor" hidden novalidate>
+        <div class="ge-title" id="ge-title">New group</div>
+        <div class="ge-namerow">
+          <label class="field"><span>Name</span><input type="text" id="ge-name" maxlength="60" placeholder="e.g. Police helicopters" autocomplete="off"></label>
+          <label class="field ge-color"><span>Colour</span><input type="color" id="ge-color" value="#14b8a6"></label>
+        </div>
+        <label class="toggle"><span class="t-text">Group switched on</span><input type="checkbox" id="ge-enabled" checked><span class="switch"></span></label>
+        <label class="toggle"><span class="t-text">Phone alerts<small>Notify me when one enters my alert radius</small></span><input type="checkbox" id="ge-alert"><span class="switch"></span></label>
+
+        <div class="group-label">Match aircraft by <span class="muted">(any one match is enough · separate with commas or new lines · <code>*</code> = wildcard)</span></div>
+        <label class="field"><span>Callsigns</span><textarea id="ge-callsign" rows="2" placeholder="RESCUE*, HLE01"></textarea></label>
+        <label class="field"><span>Registrations</span><textarea id="ge-registration" rows="2" placeholder="G-POLA, N123*"></textarea></label>
+        <label class="field"><span>Hex codes</span><textarea id="ge-hex" rows="2" placeholder="43C6F1"></textarea></label>
+        <div class="grid2">
+          <label class="field"><span>Aircraft types</span><textarea id="ge-type" rows="2" placeholder="EC35, H145"></textarea></label>
+          <label class="field"><span>Squawks</span><textarea id="ge-squawk" rows="2" placeholder="0020"></textarea></label>
+        </div>
+        <label class="field"><span>Categories</span><textarea id="ge-category" rows="1" placeholder="A7"></textarea>
+          <small>A1 light · A2 small · A3 large · A5 heavy · A7 helicopter · B1 glider · B6 drone</small></label>
+        <button type="button" class="btn ghost" id="ge-add-selected" hidden></button>
+
+        <p class="ge-error" id="ge-error" hidden></p>
+        <div class="btn-row ge-actions">
+          <button type="submit" class="btn" id="ge-save">Save group</button>
+          <button type="button" class="btn ghost" id="ge-cancel">Cancel</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn danger" id="ge-delete" hidden>Delete</button>
+        </div>
+      </form>
+    </section>
+
+    <section>
+      <h3>Units</h3>
+      <div class="grid2">
+        <label class="field"><span>Distance &amp; speed</span>
+          <select data-setting="distance_unit"><option value="nm">Nautical miles · knots</option><option value="km">Kilometres · km/h</option><option value="mi">Miles · mph</option></select></label>
+        <label class="field"><span>Altitude</span>
+          <select data-setting="altitude_unit"><option value="ft">Feet</option><option value="m">Metres</option></select></label>
+      </div>
+    </section>
+
+    <section>
+      <h3>Recent alerts</h3>
+      <ul class="alert-log" id="alert-log"></ul>
+    </section>
+
+    <p class="muted credit">Aircraft data: adsb.lol (ODbL). Map data: © OpenStreetMap contributors, tiles from your selected provider.</p>
+  </div>
+</aside>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

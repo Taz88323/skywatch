@@ -1,0 +1,14 @@
+{
+  "name": "My group",
+  "color": "#14b8a6",
+  "enabled": true,
+  "alert": false,
+  "match": {
+    "callsign": [],
+    "registration": [],
+    "hex": [],
+    "type": [],
+    "category": [],
+    "squawk": []
+  }
+}
